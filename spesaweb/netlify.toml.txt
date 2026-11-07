@@ -1,0 +1,6 @@
+[build]
+  functions = "netlify/functions"
+
+# Schedulazione Cron: tutti i giorni alle 17:00 (15:00 UTC)
+[functions."check-daily-list"]
+  schedule = "57 20 * * *"

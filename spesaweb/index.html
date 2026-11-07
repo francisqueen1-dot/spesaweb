@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SpesaWeb 🛒</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        emerald: {
+                            50: '#ecfdf5',
+                            100: '#d1fae5',
+                            500: '#10b981',
+                            600: '#059669',
+                            700: '#047857',
+                            800: '#065f46',
+                            900: '#064e3b',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome per Icone -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Font Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    </style>
+</head>
+<body class="bg-emerald-50/40 text-slate-800 min-h-screen flex flex-col justify-between antialiased">
+
+    <!-- FORM NASCOSTO INDISPENSABILE PER NETLIFY BOTS IN SPA -->
+    <form name="spesaweb-contatti" data-netlify="true" netlify-honeypot="bot-field" hidden>
+        <input type="hidden" name="form-name" value="spesaweb-contatti" />
+        <p class="hidden">
+            <label>Don’t fill this out if you’re human: <input name="bot-field" /></label>
+        </p>
+        <input type="text" name="name" />
+        <input type="email" name="email" />
+        <textarea name="message"></textarea>
+    </form>
+
+    <!-- Overlay Caricamento -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex flex-col items-center justify-center text-white hidden">
+        <div class="animate-spin rounded-full h-12 w-12 border-4 border-white border-t-emerald-600 mb-3"></div>
+        <p id="loadingText" class="font-medium text-sm">Caricamento in corso...</p>
+    </div>
+
+    <!-- Toast Modal Notifiche -->
+    <div id="toast" class="fixed top-4 right-4 left-4 sm:left-auto sm:max-w-md z-50 transform transition-all duration-300 translate-y-[-150%] opacity-0 pointer-events-none">
+        <div id="toastCard" class="bg-slate-900 text-white p-4 rounded-2xl shadow-xl flex items-center space-x-3 border border-slate-700">
+            <i id="toastIcon" class="fa-solid fa-circle-info text-emerald-400 text-xl"></i>
+            <div id="toastMessage" class="text-sm font-medium flex-1">Messaggio informativo</div>
+        </div>
+    </div>
+
+    <!-- APP CONTAINER -->
+    <div class="w-full max-w-md mx-auto flex-1 flex flex-col min-h-screen p-4 sm:p-6">
+
+        <!-- HEADER -->
+        <header class="flex items-center justify-between py-3 mb-2">
+            <div class="flex items-center space-x-2">
+                <div class="w-10 h-10 rounded-2xl bg-emerald-700 text-emerald-100 flex items-center justify-center shadow-md shadow-emerald-700/20">
+                    <i class="fa-solid fa-cart-shopping text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-slate-900 leading-none text-lg">SpesaWeb</h1>
+                    <span id="headerUser" class="text-xs text-slate-500 font-medium">Non connesso</span>
+                </div>
+            </div>
+            <div class="flex items-center space-x-1">
+                <button onclick="openModal('modalHowTo')" title="Come funziona" class="w-9 h-9 rounded-xl bg-slate-200/80 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition">
+                    <i class="fa-solid fa-circle-question text-sm"></i>
+                </button>
+                <button onclick="openModal('modalContact')" title="Contatta Amministratore" class="w-9 h-9 rounded-xl bg-slate-200/80 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition">
+                    <i class="fa-solid fa-envelope text-sm"></i>
+                </button>
+                <button id="btnLogout" onclick="logout()" class="hidden w-9 h-9 rounded-xl bg-slate-200/80 hover:bg-red-50 text-slate-600 hover:text-red-600 flex items-center justify-center transition">
+                    <i class="fa-solid fa-right-from-bracket text-sm"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- VISTA 1: AUTENTICAZIONE -->
+        <div id="viewAuth" class="flex-1 flex flex-col justify-center space-y-6 py-6">
+            <div class="text-center space-y-2">
+                <h2 class="text-2xl font-bold text-slate-900">Benvenuto su SpesaWeb 🛒</h2>
+                <p class="text-sm text-slate-500">Accedi o registrati per gestire e condividere la lista della spesa.</p>
+            </div>
+
+            <div class="flex bg-slate-200/70 p-1 rounded-2xl text-xs font-semibold">
+                <button id="tabLoginBtn" onclick="switchAuthTab('login')" class="flex-1 py-2.5 rounded-xl bg-white text-slate-900 shadow-sm transition">Accedi</button>
+                <button id="tabRegisterBtn" onclick="switchAuthTab('register')" class="flex-1 py-2.5 rounded-xl text-slate-500 transition">Registrati</button>
+            </div>
+
+            <form id="authForm" onsubmit="handleAuth(event)" class="space-y-4 bg-white p-5 rounded-3xl shadow-sm border border-slate-100">
+                <div id="nameGroup" class="hidden space-y-1">
+                    <label class="text-xs font-semibold text-slate-600 ml-1">Nome e Cognome</label>
+                    <div class="relative">
+                        <i class="fa-regular fa-user absolute left-4 top-3.5 text-slate-400"></i>
+                        <input type="text" id="authName" placeholder="es. Maria Rossi" class="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 pl-10 pr-4 text-sm focus:outline-none focus:border-emerald-600 focus:bg-white transition">
+                    </div>
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-xs font-semibold text-slate-600 ml-1">Email</label>
+                    <div class="relative">
+                        <i class="fa-regular fa-envelope absolute left-4 top-3.5 text-slate-400"></i>
+                        <input type="email" id="authEmail" required placeholder="famiglia@email.com" class="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 pl-10 pr-4 text-sm focus:outline-none focus:border-emerald-600 focus:bg-white transition">
+                    </div>
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-xs font-semibold text-slate-600 ml-1">Password</label>
+                    <div class="relative">
+                        <i class="fa-solid fa-lock absolute left-4 top-3.5 text-slate-400"></i>
+                        <input type="password" id="authPassword" required placeholder="••••••••" class="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 pl-10 pr-4 text-sm focus:outline-none focus:border-emerald-600 focus:bg-white transition">
+                    </div>
+                </div>
+
+                <button type="submit" id="authSubmitBtn" class="w-full bg-emerald-700 hover:bg-emerald-800 active:scale-[0.98] text-white font-semibold py-3.5 rounded-2xl shadow-lg shadow-emerald-700/30 transition duration-200 text-sm mt-2">
+                    Accedi
+                </button>
+            </form>
+        </div>
+
+        <!-- VISTA 2: SELEZIONE E CREAZIONE LISTA -->
+        <div id="viewLists" class="hidden flex-1 flex flex-col justify-center space-y-6 py-6">
+            <div class="text-center space-y-2">
+                <h2 class="text-2xl font-bold text-slate-900">Le tue Liste Spesa</h2>
+                <p class="text-sm text-slate-500">Unisciti a una lista condivisa con il codice o creane una nuova.</p>
+            </div>
+
+            <!-- CREA LISTA -->
+            <div class="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 space-y-3">
+                <h3 class="font-semibold text-slate-800 text-sm flex items-center">
+                    <i class="fa-solid fa-plus-circle text-emerald-600 mr-2"></i> Crea Nuova Lista
+                </h3>
+                <div class="flex space-x-2">
+                    <input type="text" id="newListName" placeholder="es. Lista Famiglia" class="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-emerald-600">
+                    <button onclick="createList()" class="bg-emerald-700 hover:bg-emerald-800 text-white font-semibold px-5 py-3 rounded-2xl text-sm transition active:scale-95">
+                        Crea
+                    </button>
+                </div>
+            </div>
+
+            <!-- UNISCITI ALLA LISTA -->
+            <div class="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 space-y-3">
+                <h3 class="font-semibold text-slate-800 text-sm flex items-center">
+                    <i class="fa-solid fa-key text-emerald-600 mr-2"></i> Unisciti tramite Codice
+                </h3>
+                <div class="flex space-x-2">
+                    <input type="text" id="joinListCode" placeholder="Codice 6 cifre (es. SP1234)" class="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm uppercase tracking-wider font-mono focus:outline-none focus:border-emerald-600">
+                    <button onclick="joinList()" class="bg-slate-900 hover:bg-slate-800 text-white font-semibold px-5 py-3 rounded-2xl text-sm transition active:scale-95">
+                        Entra
+                    </button>
+                </div>
+            </div>
+
+            <!-- LE MIE LISTE -->
+            <div class="space-y-2">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 ml-2">Liste Attive</h3>
+                <div id="myListsList" class="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
+                    <!-- Popolato da JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- VISTA 3: DASHBOARD SPESA -->
+        <div id="viewDashboard" class="hidden flex-1 flex flex-col space-y-4 py-2">
+            
+            <!-- LIST HEADER -->
+            <div class="bg-gradient-to-r from-emerald-800 to-emerald-950 text-white p-5 rounded-3xl shadow-lg shadow-emerald-900/20 flex items-center justify-between relative overflow-hidden">
+                <div class="space-y-1 z-10">
+                    <span class="text-[10px] font-bold uppercase tracking-widest text-emerald-300/80">Lista Attiva</span>
+                    <h2 id="dashListName" class="text-xl font-bold leading-none">Nome Lista</h2>
+                    <div class="flex items-center space-x-2 pt-1">
+                        <span id="dashListCode" class="bg-white/10 text-emerald-200 font-mono text-xs px-2.5 py-1 rounded-lg border border-white/10">------</span>
+                        <button onclick="copyListCode()" class="text-xs text-emerald-200 hover:text-white transition">
+                            <i class="fa-regular fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="flex space-x-2 z-10">
+                    <button onclick="openModal('modalHistory')" title="Storico Spese" class="bg-white/10 hover:bg-white/20 text-white p-3 rounded-2xl transition text-xs flex flex-col items-center">
+                        <i class="fa-solid fa-clock-rotate-left mb-0.5"></i>
+                        <span class="text-[9px]">Storico</span>
+                    </button>
+                    <button onclick="leaveList()" title="Cambia Lista" class="bg-white/10 hover:bg-white/20 text-white p-3 rounded-2xl transition text-xs flex flex-col items-center">
+                        <i class="fa-solid fa-arrow-right-from-bracket mb-0.5"></i>
+                        <span class="text-[9px]">Esci</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- SEZIONE 1: DA COMPRARE (IN ALTO) -->
+            <div class="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 flex-1 flex flex-col min-h-[220px]">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center space-x-2">
+                        <h3 class="font-bold text-slate-900 text-sm">Da Comprare</h3>
+                        <span id="toBuyCount" class="bg-emerald-100 text-emerald-800 text-xs font-bold px-2 py-0.5 rounded-full">0</span>
+                    </div>
+                    <button onclick="openFinishModal()" class="bg-emerald-700 hover:bg-emerald-800 active:scale-95 text-white font-bold text-xs px-3 py-2 rounded-xl transition flex items-center space-x-1 shadow-sm">
+                        <i class="fa-solid fa-check-double"></i>
+                        <span>FINE SPESA</span>
+                    </button>
+                </div>
+
+                <div id="toBuyItemsList" class="flex-1 space-y-2 overflow-y-auto custom-scrollbar max-h-60 pr-1">
+                    <!-- Articoli caricati via JS -->
+                </div>
+            </div>
+
+            <!-- SEZIONE 2: GENERI DISPONIBILI / CATALOGO (IN BASSO) -->
+            <div class="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 space-y-4">
+                <h3 class="font-bold text-slate-900 text-sm flex items-center justify-between">
+                    <span>Generi Disponibili (A-Z)</span>
+                    <span class="text-[11px] font-normal text-slate-400">Toccare per aggiungere</span>
+                </h3>
+
+                <!-- FORM AGGIUNTA PRODOTTO NUOVO -->
+                <div class="flex space-x-2">
+                    <input type="text" id="customItemInput" placeholder="Aggiungi nuovo genere non in lista..." class="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-2.5 text-xs focus:outline-none focus:border-emerald-600">
+                    <button onclick="addCustomItem()" class="bg-slate-900 hover:bg-slate-800 active:scale-95 text-white font-semibold px-4 py-2.5 rounded-2xl text-xs transition">
+                        + Aggiungi
+                    </button>
+                </div>
+
+                <!-- CHIPS PRODOTTI DISPONIBILI -->
+                <div id="availableItemsChips" class="flex flex-wrap gap-2 max-h-48 overflow-y-auto custom-scrollbar pt-1">
+                    <!-- Popolato via JS in ordine alfabetico -->
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- MODALE CONFERMA FINE SPESA -->
+    <div id="modalFinishConfirm" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-3xl w-full max-w-sm p-6 space-y-5 shadow-xl border border-slate-100 text-center">
+            <div class="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto text-xl font-bold">
+                <i class="fa-solid fa-circle-check"></i>
+            </div>
+            <div class="space-y-1">
+                <h3 class="font-bold text-slate-900 text-xl tracking-tight">SPESA COMPLETATA!</h3>
+                <p class="text-xs text-slate-500 pt-1">La spesa è stata salvata nello storico.<br>Vuoi scaricare il file CSV?</p>
+            </div>
+            <div class="flex flex-col space-y-2 pt-2">
+                <button onclick="executeFinishShopping(true)" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-semibold py-3 rounded-2xl text-xs transition flex items-center justify-center space-x-2 shadow-sm active:scale-95">
+                    <i class="fa-solid fa-file-arrow-down text-sm"></i>
+                    <span>Sì, scarica CSV</span>
+                </button>
+                <button onclick="executeFinishShopping(false)" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-3 rounded-2xl text-xs transition active:scale-95">
+                    No, grazie
+                </button>
+                <button onclick="closeModal('modalFinishConfirm')" class="w-full text-slate-400 hover:text-slate-600 font-medium py-1 text-xs transition">
+                    Annulla
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALE 1: STORICO SPESE & SCARICAMENTO CSV -->
+    <div id="modalHistory" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-3xl w-full max-w-md p-5 space-y-4 shadow-xl border border-slate-100 max-h-[85vh] flex flex-col">
+            <div class="flex items-center justify-between border-b pb-3">
+                <h3 class="font-bold text-slate-900 text-base flex items-center">
+                    <i class="fa-solid fa-clock-rotate-left text-emerald-600 mr-2"></i> Storico Spese Passate
+                </h3>
+                <button onclick="closeModal('modalHistory')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div id="historyListContainer" class="flex-1 overflow-y-auto custom-scrollbar space-y-3 py-1">
+                <!-- Spese passate caricate qui -->
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALE 2: HOW TO (GUIDA UTENTE) -->
+    <div id="modalHowTo" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-3xl w-full max-w-md p-5 space-y-4 shadow-xl border border-slate-100 max-h-[85vh] flex flex-col">
+            <div class="flex items-center justify-between border-b pb-3">
+                <h3 class="font-bold text-slate-900 text-base flex items-center">
+                    <i class="fa-solid fa-circle-question text-emerald-600 mr-2"></i> Come Usare SpesaWeb
+                </h3>
+                <button onclick="closeModal('modalHowTo')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div class="flex-1 overflow-y-auto custom-scrollbar space-y-3 text-xs text-slate-600 leading-relaxed">
+                <p><strong>1. Accesso & Condivisione:</strong> Crea una lista oppure entra in una esistente digitando il codice univoco a 6 cifre.</p>
+                <p><strong>2. Preparazione Spesa:</strong> Tocca i prodotti in ordine alfabetico dalla sezione <em>"Generi Disponibili"</em> per metterli in alto in <em>"Da Comprare"</em>.</p>
+                <p><strong>3. Al Supermercato:</strong> Spunta i prodotti man mano che li prendi. Torneranno automaticamente nella lista dei disponibili.</p>
+                <p><strong>4. Fine Spesa:</strong> Premi <strong>FINE SPESA</strong> per archiviare unicamente gli articoli che hai spuntato e scegliere se scaricare il CSV.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALE 3: CONTATTI AMMINISTRATORE (NETLIFY FORM AGGIORNATO) -->
+    <div id="modalContact" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-3xl w-full max-w-md p-5 space-y-4 shadow-xl border border-slate-100">
+            <div class="flex items-center justify-between border-b pb-3">
+                <h3 class="font-bold text-slate-900 text-base flex items-center">
+                    <i class="fa-solid fa-envelope text-emerald-600 mr-2"></i> Contatta Amministratore
+                </h3>
+                <button onclick="closeModal('modalContact')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            
+            <form name="spesaweb-contatti" method="POST" action="/" data-netlify="true" netlify-honeypot="bot-field" onsubmit="handleNetlifyContact(event)" class="space-y-3">
+                <!-- Campo nascosto indispensabile per Netlify in una SPA -->
+                <input type="hidden" name="form-name" value="spesaweb-contatti" />
+                <p class="hidden">
+                    <label>Don’t fill this out if you’re human: <input name="bot-field" /></label>
+                </p>
+
+                <div>
+                    <label class="text-xs font-semibold text-slate-600">Il tuo Nome</label>
+                    <input type="text" name="name" id="contactName" required class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs focus:outline-none focus:border-emerald-600">
+                </div>
+                <div>
+                    <label class="text-xs font-semibold text-slate-600">La tua Email</label>
+                    <input type="email" name="email" id="contactEmail" required class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs focus:outline-none focus:border-emerald-600">
+                </div>
+                <div>
+                    <label class="text-xs font-semibold text-slate-600">Messaggio</label>
+                    <textarea name="message" id="contactMessage" rows="3" required class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs focus:outline-none focus:border-emerald-600"></textarea>
+                </div>
+                <button type="submit" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-semibold py-3 rounded-2xl text-xs transition active:scale-95">
+                    Invia Messaggio
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- FIREBASE SDK & JS LOGIC -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
+        import { 
+            getAuth, 
+            createUserWithEmailAndPassword, 
+            signInWithEmailAndPassword, 
+            onAuthStateChanged, 
+            signOut, 
+            updateProfile 
+        } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
+        import { 
+            getFirestore, 
+            doc, 
+            getDoc, 
+            setDoc, 
+            updateDoc, 
+            arrayUnion, 
+            onSnapshot, 
+            collection, 
+            query, 
+            where, 
+            getDocs,
+            addDoc,
+            orderBy 
+        } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
+
+        // LISTA DI DEFAULT RICHIESTA
+        const DEFAULT_ITEMS = [
+            "Carta igienica", "Farina", "nesquick", "nescafè", "Mayonnaise",
+            "Ketchup", "Funghi", "Salsiccia", "Insalata", "Rucola",
+            "Philadelphia", "Prosciutto", "Salmone", "Avocado", "Uova",
+            "mozzarelle", "farina", "nutella", "marmellata fragola", "marmellata albicocca"
+        ];
+
+        // CONFIGURAZIONE FIREBASE DEDICATA (spesa-condivisa-f2f50)
+        const firebaseConfig = {
+            apiKey: "AIzaSyAMBwDk5oFNcHF8Dj-8Y5PFr_FaS3hk0ds",
+            authDomain: "spesa-condivisa-f2f50.firebaseapp.com",
+            projectId: "spesa-condivisa-f2f50",
+            storageBucket: "spesa-condivisa-f2f50.firebasestorage.app",
+            messagingSenderId: "443741119372",
+            appId: "1:443741119372:web:fc3b6887854b21f5ff6ca9"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // STATO APPLICAZIONE
+        let currentUser = null;
+        let currentListId = null;
+        let currentListData = null;
+        let listUnsubscribe = null;
+        let historyUnsubscribe = null;
+        let authTabMode = 'login';
+
+        // Memoria per tracciare SOLO gli articoli spuntati in questa sessione
+        let sessionBoughtItems = [];
+        let historyStore = [];
+
+        // UI UTILITIES
+        function showLoading(msg = "Caricamento in corso...") {
+            document.getElementById('loadingText').innerText = msg;
+            document.getElementById('loadingOverlay').classList.remove('hidden');
+        }
+        function hideLoading() {
+            document.getElementById('loadingOverlay').classList.add('hidden');
+        }
+
+        function showToast(message, type = "info") {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toastMessage');
+            const toastIcon = document.getElementById('toastIcon');
+
+            toastMessage.innerText = message;
+            toastIcon.className = type === 'error' ? "fa-solid fa-circle-exclamation text-red-400 text-xl" :
+                                 type === 'success' ? "fa-solid fa-circle-check text-emerald-400 text-xl" :
+                                 "fa-solid fa-circle-info text-amber-400 text-xl";
+
+            toast.classList.remove('translate-y-[-150%]', 'opacity-0', 'pointer-events-none');
+            setTimeout(() => toast.classList.add('translate-y-[-150%]', 'opacity-0', 'pointer-events-none'), 3000);
+        }
+
+        window.openModal = (id) => document.getElementById(id).classList.remove('hidden');
+        window.closeModal = (id) => document.getElementById(id).classList.add('hidden');
+
+        function showView(viewId) {
+            ['viewAuth', 'viewLists', 'viewDashboard'].forEach(v => document.getElementById(v).classList.add('hidden'));
+            document.getElementById(viewId).classList.remove('hidden');
+            document.getElementById('btnLogout').classList.toggle('hidden', viewId === 'viewAuth');
+            document.getElementById('headerUser').innerText = viewId === 'viewAuth' ? "Non connesso" : (currentUser?.displayName || currentUser?.email || "Utente");
+        }
+
+        // AUTHENTICATION ROBUST AGENT
+        onAuthStateChanged(auth, async (user) => {
+            currentUser = user;
+            if (user) {
+                try {
+                    await ensureUserProfile(user);
+                    loadUserLists();
+                    showView('viewLists');
+                } catch (e) {
+                    console.error("Errore inizializzazione profilo:", e);
+                    showView('viewLists');
+                }
+            } else {
+                if (listUnsubscribe) listUnsubscribe();
+                if (historyUnsubscribe) historyUnsubscribe();
+                showView('viewAuth');
+            }
+        });
+
+        async function ensureUserProfile(user) {
+            const userRef = doc(db, 'users_spesa', user.uid);
+            const docSnap = await getDoc(userRef);
+            if (!docSnap.exists()) {
+                await setDoc(userRef, {
+                    uid: user.uid,
+                    displayName: user.displayName || user.email.split('@')[0],
+                    email: user.email,
+                    lists: []
+                });
+            }
+        }
+
+        window.switchAuthTab = function(mode) {
+            authTabMode = mode;
+            document.getElementById('tabRegisterBtn').className = mode === 'register' ? "flex-1 py-2.5 rounded-xl bg-white text-slate-900 shadow-sm transition" : "flex-1 py-2.5 rounded-xl text-slate-500 transition";
+            document.getElementById('tabLoginBtn').className = mode === 'login' ? "flex-1 py-2.5 rounded-xl bg-white text-slate-900 shadow-sm transition" : "flex-1 py-2.5 rounded-xl text-slate-500 transition";
+            document.getElementById('nameGroup').classList.toggle('hidden', mode === 'login');
+            document.getElementById('authSubmitBtn').innerText = mode === 'register' ? "Registrati e Inizia" : "Accedi";
+        };
+
+        window.handleAuth = async function(e) {
+            e.preventDefault();
+            const email = document.getElementById('authEmail').value.trim();
+            const password = document.getElementById('authPassword').value;
+            const displayName = document.getElementById('authName').value.trim();
+
+            showLoading(authTabMode === 'register' ? "Registrazione..." : "Accesso in corso...");
+
+            try {
+                if (authTabMode === 'register') {
+                    if (!displayName) { hideLoading(); showToast("Inserisci il tuo Nome", "error"); return; }
+                    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                    await updateProfile(userCredential.user, { displayName });
+                    await setDoc(doc(db, 'users_spesa', userCredential.user.uid), {
+                        uid: userCredential.user.uid,
+                        displayName,
+                        email,
+                        lists: []
+                    });
+                    showToast("Account creato!", "success");
+                } else {
+                    await signInWithEmailAndPassword(auth, email, password);
+                    showToast("Bentornato!", "success");
+                }
+            } catch (err) {
+                let msg = "Errore di autenticazione";
+                if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
+                    msg = "Email o password errati";
+                } else if (err.code === 'auth/email-already-in-use') {
+                    msg = "Email già registrata";
+                } else if (err.code === 'auth/weak-password') {
+                    msg = "La password deve avere almeno 6 caratteri";
+                }
+                showToast(msg, "error");
+            } finally {
+                hideLoading();
+            }
+        };
+
+        window.logout = () => signOut(auth);
+
+        // LIST MANAGEMENT
+        function generateCode() {
+            const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+            let code = "SP";
+            for (let i = 0; i < 4; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+            return code;
+        }
+
+        window.createList = async function() {
+            const nameInput = document.getElementById('newListName');
+            const name = nameInput.value.trim();
+            if (!name) return showToast("Inserisci un nome per la lista", "error");
+
+            showLoading("Creazione lista...");
+            try {
+                const code = generateCode();
+                const listRef = doc(collection(db, 'shopping_lists'));
+                
+                const uniqueCatalog = Array.from(new Set(DEFAULT_ITEMS.map(i => i.trim())));
+
+                const newList = {
+                    id: listRef.id,
+                    name: name,
+                    code: code,
+                    createdBy: currentUser.uid,
+                    createdAt: new Date(),
+                    catalog: uniqueCatalog,
+                    toBuy: []
+                };
+
+                await setDoc(listRef, newList);
+                await updateDoc(doc(db, 'users_spesa', currentUser.uid), {
+                    lists: arrayUnion({ id: listRef.id, name, code })
+                });
+
+                nameInput.value = "";
+                showToast(`Lista '${name}' creata! Codice: ${code}`, "success");
+                enterList(listRef.id);
+            } catch (err) {
+                showToast("Errore durante la creazione", "error");
+            } finally {
+                hideLoading();
+            }
+        };
+
+        window.joinList = async function() {
+            const codeInput = document.getElementById('joinListCode');
+            const code = codeInput.value.trim().toUpperCase();
+            if (code.length !== 6) return showToast("Inserisci un codice valido di 6 caratteri", "error");
+
+            showLoading("Ricerca lista...");
+            try {
+                const q = query(collection(db, 'shopping_lists'), where('code', '==', code));
+                const querySnap = await getDocs(q);
+
+                if (querySnap.empty) {
+                    showToast("Nessuna lista trovata con questo codice", "error");
+                    return;
+                }
+
+                const listDoc = querySnap.docs[0];
+                const listData = listDoc.data();
+
+                await updateDoc(doc(db, 'users_spesa', currentUser.uid), {
+                    lists: arrayUnion({ id: listDoc.id, name: listData.name, code: listData.code })
+                });
+
+                codeInput.value = "";
+                showToast(`Ti sei unito alla lista '${listData.name}'!`, "success");
+                enterList(listDoc.id);
+            } catch (err) {
+                showToast("Errore durante l'accesso", "error");
+            } finally {
+                hideLoading();
+            }
+        };
+
+        async function loadUserLists() {
+            if (!currentUser) return;
+            const userSnap = await getDoc(doc(db, 'users_spesa', currentUser.uid));
+            const container = document.getElementById('myListsList');
+            container.innerHTML = "";
+
+            if (!userSnap.exists() || !userSnap.data().lists || userSnap.data().lists.length === 0) {
+                container.innerHTML = `<p class="text-xs text-slate-400 italic text-center py-2">Nessuna lista attiva.</p>`;
+                return;
+            }
+
+            userSnap.data().lists.forEach(l => {
+                const item = document.createElement('div');
+                item.className = "bg-white p-3.5 rounded-2xl border border-slate-100 flex items-center justify-between shadow-sm hover:border-emerald-400 transition cursor-pointer";
+                item.onclick = () => enterList(l.id);
+                item.innerHTML = `
+                    <div class="flex items-center space-x-3">
+                        <div class="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-sm">🛒</div>
+                        <div>
+                            <div class="font-bold text-slate-800 text-sm leading-tight">${l.name}</div>
+                            <div class="text-[10px] text-slate-400 font-mono">Codice: ${l.code}</div>
+                        </div>
+                    </div>
+                    <i class="fa-solid fa-chevron-right text-slate-300 text-xs"></i>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        // ENTER LIST & LISTEN REALTIME
+        function enterList(listId) {
+            currentListId = listId;
+            sessionBoughtItems = [];
+            showView('viewDashboard');
+
+            if (listUnsubscribe) listUnsubscribe();
+            listUnsubscribe = onSnapshot(doc(db, 'shopping_lists', listId), (docSnap) => {
+                if (docSnap.exists()) {
+                    currentListData = docSnap.data();
+                    renderDashboard();
+                }
+            });
+
+            if (historyUnsubscribe) historyUnsubscribe();
+            const historyQuery = query(collection(db, 'shopping_lists', listId, 'purchases'), orderBy('timestamp', 'desc'));
+            historyUnsubscribe = onSnapshot(historyQuery, (snapshot) => {
+                renderHistoryList(snapshot);
+            });
+        }
+
+        window.leaveList = function() {
+            if (listUnsubscribe) listUnsubscribe();
+            if (historyUnsubscribe) historyUnsubscribe();
+            currentListId = null;
+            currentListData = null;
+            sessionBoughtItems = [];
+            loadUserLists();
+            showView('viewLists');
+        };
+
+        window.copyListCode = function() {
+            if (!currentListData) return;
+            navigator.clipboard.writeText(currentListData.code);
+            showToast(`Codice ${currentListData.code} copiato negli appunti!`, "success");
+        };
+
+        // RENDER SPESA REALTIME
+        function renderDashboard() {
+            if (!currentListData) return;
+
+            document.getElementById('dashListName').innerText = currentListData.name;
+            document.getElementById('dashListCode').innerText = currentListData.code;
+
+            const catalog = currentListData.catalog || [];
+            const toBuy = currentListData.toBuy || [];
+
+            document.getElementById('toBuyCount').innerText = toBuy.length;
+
+            // 1. Render Sezione "Da Comprare"
+            const toBuyContainer = document.getElementById('toBuyItemsList');
+            toBuyContainer.innerHTML = "";
+
+            if (toBuy.length === 0) {
+                toBuyContainer.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-slate-300 text-xs py-8"><i class="fa-solid fa-basket-shopping text-3xl mb-2"></i>Nessun genere da comprare al momento</div>`;
+            } else {
+                toBuy.forEach(item => {
+                    const row = document.createElement('div');
+                    row.className = "flex items-center justify-between p-3 rounded-2xl bg-emerald-50/60 border border-emerald-100/80 hover:bg-emerald-100/50 transition cursor-pointer";
+                    row.onclick = () => markAsBought(item);
+                    row.innerHTML = `
+                        <span class="font-medium text-slate-800 text-xs flex items-center">
+                            <i class="fa-regular fa-circle text-emerald-600 mr-2.5 text-sm"></i> ${item}
+                        </span>
+                        <span class="text-[10px] text-emerald-700 font-semibold bg-white/80 px-2 py-0.5 rounded-md border border-emerald-200">Spunta</span>
+                    `;
+                    toBuyContainer.appendChild(row);
+                });
+            }
+
+            // 2. Render Sezione "Generi Disponibili" (Ordinati A-Z)
+            const chipsContainer = document.getElementById('availableItemsChips');
+            chipsContainer.innerHTML = "";
+
+            const available = catalog.filter(item => !toBuy.includes(item));
+            available.sort((a, b) => a.localeCompare(b, 'it', { sensitivity: 'base' }));
+
+            if (available.length === 0) {
+                chipsContainer.innerHTML = `<p class="text-xs text-slate-400 italic">Tutti i generi sono stati aggiunti alla spesa!</p>`;
+            } else {
+                available.forEach(item => {
+                    const chip = document.createElement('button');
+                    chip.className = "bg-slate-100 hover:bg-emerald-50 hover:text-emerald-800 hover:border-emerald-300 border border-slate-200/80 text-slate-700 font-medium text-xs px-3 py-2 rounded-xl transition flex items-center active:scale-95";
+                    chip.onclick = () => addToBuy(item);
+                    chip.innerHTML = `<i class="fa-solid fa-plus text-[10px] mr-1.5 opacity-60"></i> ${item}`;
+                    chipsContainer.appendChild(chip);
+                });
+            }
+        }
+
+        // AZIONI ITEMS
+        async function addToBuy(item) {
+            if (!currentListId || !currentListData) return;
+            try {
+                const newToBuy = [...(currentListData.toBuy || []), item];
+                await updateDoc(doc(db, 'shopping_lists', currentListId), { toBuy: newToBuy });
+            } catch (err) {
+                showToast("Errore aggiornamento lista", "error");
+            }
+        }
+
+        async function markAsBought(item) {
+            if (!currentListId || !currentListData) return;
+            try {
+                if (!sessionBoughtItems.includes(item)) {
+                    sessionBoughtItems.push(item);
+                }
+
+                const newToBuy = (currentListData.toBuy || []).filter(i => i !== item);
+                await updateDoc(doc(db, 'shopping_lists', currentListId), { toBuy: newToBuy });
+            } catch (err) {
+                showToast("Errore aggiornamento lista", "error");
+            }
+        }
+
+        window.addCustomItem = async function() {
+            const input = document.getElementById('customItemInput');
+            const item = input.value.trim();
+            if (!item) return;
+
+            if (!currentListId || !currentListData) return;
+
+            try {
+                const catalog = currentListData.catalog || [];
+                const toBuy = currentListData.toBuy || [];
+
+                const updatedCatalog = catalog.includes(item) ? catalog : [...catalog, item];
+                const updatedToBuy = toBuy.includes(item) ? toBuy : [...toBuy, item];
+
+                await updateDoc(doc(db, 'shopping_lists', currentListId), {
+                    catalog: updatedCatalog,
+                    toBuy: updatedToBuy
+                });
+
+                input.value = "";
+                showToast(`'${item}' aggiunto alla spesa!`, "success");
+            } catch (err) {
+                showToast("Errore durante l'aggiunta", "error");
+            }
+        };
+
+        // GESTIONE FINE SPESA & CSV TRAMITE BLOB
+        window.openFinishModal = function() {
+            if (sessionBoughtItems.length === 0) {
+                return showToast("Nessun articolo spuntato nella sessione di spesa!", "error");
+            }
+            openModal('modalFinishConfirm');
+        };
+
+        // Nel tuo index.html, dentro executeFinishShopping:
+window.executeFinishShopping = async function(shouldDownloadCSV) {
+    closeModal('modalFinishConfirm');
+    if (!currentListData || !currentListId) return;
+    if (sessionBoughtItems.length === 0) return;
+
+    showLoading("Archiviazione spesa...");
+
+    try {
+        const now = new Date();
+        const itemsToArchive = [...sessionBoughtItems];
+        const userName = currentUser.displayName || currentUser.email;
+
+        const purchaseData = {
+            timestamp: now,
+            dateStr: now.toLocaleDateString('it-IT') + ' ' + now.toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'}),
+            user: userName,
+            items: itemsToArchive,
+            totalCount: itemsToArchive.length
+        };
+
+        // 1. Salva lo storico su Firestore
+        await addDoc(collection(db, 'shopping_lists', currentListId, 'purchases'), purchaseData);
+
+        // 2. Resetta la lista toBuy su Firestore
+        await updateDoc(doc(db, 'shopping_lists', currentListId), { toBuy: [] });
+
+        // 3. CHIAMA LA NETLIFY FUNCTION PER SPEDIRE L'EMAIL AL GRUPPO
+        fetch('/.netlify/functions/notify-finish-shopping', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                user: userName,
+                itemsCount: itemsToArchive.length,
+                listName: currentListData.name
+            })
+        }).catch(err => console.error("Errore invio notifica email:", err));
+
+        sessionBoughtItems = [];
+
+        if (shouldDownloadCSV) {
+            downloadCSV(purchaseData);
+            showToast("Spesa completata, CSV scaricato e notifica inviata!", "success");
+        } else {
+            showToast("Spesa completata e notifica inviata al gruppo!", "success");
+        }
+    } catch (err) {
+        showToast("Errore durante l'archiviazione", "error");
+    } finally {
+        hideLoading();
+    }
+};
+        function downloadCSV(data) {
+            let csvLines = ["Data Spesa,Utente,Genere Comprato"];
+            data.items.forEach(item => {
+                csvLines.push(`"${data.dateStr}","${data.user}","${item}"`);
+            });
+
+            const csvString = csvLines.join("\n");
+            const blob = new Blob(["\ufeff" + csvString], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", `Spesa_${data.dateStr.replace(/[/:\s]/g, '_')}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        // RENDER STORICO SPESE
+        function renderHistoryList(snapshot) {
+            const container = document.getElementById('historyListContainer');
+            container.innerHTML = "";
+            historyStore = [];
+
+            if (snapshot.empty) {
+                container.innerHTML = `<p class="text-xs text-slate-400 italic text-center py-4">Nessuna spesa passata registrata.</p>`;
+                return;
+            }
+
+            snapshot.docs.forEach((docSnap, index) => {
+                const p = docSnap.data();
+                historyStore.push(p);
+
+                const card = document.createElement('div');
+                card.className = "p-3.5 rounded-2xl bg-slate-50 border border-slate-100 flex flex-col space-y-2 text-xs";
+                card.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <span class="font-bold text-slate-800"><i class="fa-regular fa-calendar-check text-emerald-600 mr-1"></i> ${p.dateStr}</span>
+                        <span class="text-[10px] bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded-full">${p.totalCount} articoli</span>
+                    </div>
+                    <p class="text-slate-500 text-[11px] line-clamp-2"><strong>Generi:</strong> ${p.items.join(', ')}</p>
+                    <button onclick="downloadHistoryCSV(${index})" class="self-end text-emerald-700 hover:text-emerald-800 font-semibold text-[11px] flex items-center space-x-1">
+                        <i class="fa-solid fa-file-csv text-sm"></i>
+                        <span>Scarica CSV</span>
+                    </button>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        window.downloadHistoryCSV = (index) => {
+            if (historyStore[index]) {
+                downloadCSV(historyStore[index]);
+            }
+        };
+
+        // FORM CONTATTI NETLIFY (GESTIONE AJAX/FETCH PER SPA)
+        window.handleNetlifyContact = function(e) {
+            e.preventDefault();
+            const myForm = e.target;
+            const formData = new FormData(myForm);
+            
+            showLoading("Invio messaggio...");
+            fetch("/", {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: new URLSearchParams(formData).toString(),
+            })
+            .then(() => {
+                closeModal('modalContact');
+                myForm.reset();
+                showToast("Messaggio inviato con successo!", "success");
+            })
+            .catch(() => showToast("Errore durante l'invio del messaggio", "error"))
+            .finally(() => hideLoading());
+        };
+
+        document.getElementById('modalContact').addEventListener('click', () => {
+            if (currentUser) {
+                document.getElementById('contactName').value = currentUser.displayName || '';
+                document.getElementById('contactEmail').value = currentUser.email || '';
+            }
+        });
+    </script>
+</body>
+</html>
